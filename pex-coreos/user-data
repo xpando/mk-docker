@@ -1,0 +1,103 @@
+#cloud-config
+
+coreos:
+  etcd2:
+    #generate a new token for each unique cluster from https://discovery.etcd.io/new
+    #discovery: https://discovery.etcd.io/<token>
+    # multi-region and multi-cloud deployments need to use $public_ipv4
+    advertise-client-urls: http://$public_ipv4:2379
+    initial-advertise-peer-urls: http://$private_ipv4:2380
+    # listen on both the official ports and the legacy ports
+    # legacy ports can be omitted if your application doesn't depend on them
+    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+    listen-peer-urls: http://$private_ipv4:2380,http://$private_ipv4:7001
+  fleet:
+    public-ip: $public_ipv4
+  flannel:
+    interface: $public_ipv4
+  units:
+    - name: etcd.service
+      command: start
+    # To use etcd2, comment out the above service and uncomment these
+    # Note: this requires a release that contains etcd2
+    #- name: etcd2.service
+    #  command: start
+    - name: fleet.service
+      command: start
+    - name: docker-tcp.socket
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Docker Socket for the API
+
+        [Socket]
+        ListenStream=2375
+        Service=docker.service
+        BindIPv6Only=both
+
+        [Install]
+        WantedBy=sockets.target
+
+    - name: rabbitmq.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=RabbitMQ
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        Restart=always
+        ExecStartPre=-/usr/bin/docker kill rabbitmq
+        ExecStartPre=-/usr/bin/docker rm rabbitmq
+        ExecStartPre=/usr/bin/docker pull rabbitmq:3-management
+        ExecStart=/usr/bin/docker run -h rabbitmq.local --name rabbitmq -v /vol/rabbitmq:/var/lib/rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+        ExecStop=/usr/bin/docker stop -t 10 rabbitmq 
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: mongo.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=MongoDB
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        Restart=always
+        ExecStartPre=-/usr/bin/docker kill mongo
+        ExecStartPre=-/usr/bin/docker rm mongo
+        ExecStartPre=/usr/bin/docker pull mongo
+        ExecStart=/usr/bin/docker run --name mongo -v /vol/mongo:/data/db -p 27017:27017 mongo
+        ExecStop=/usr/bin/docker stop -t 10 mongo 
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: elasticsearch.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=ElasticSearch
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        TimeoutStartSec=0
+        Restart=always
+        ExecStartPre=-/usr/bin/docker kill elasticsearch
+        ExecStartPre=-/usr/bin/docker rm elasticsearch
+        ExecStartPre=/usr/bin/docker pull elasticsearch
+        ExecStart=/usr/bin/docker run --name elasticsearch -v /vol/elasticsearch:/usr/share/elasticsearch/data -p 9200:9200 elasticsearch
+        ExecStop=/usr/bin/docker stop -t 10 elasticsearch 
+
+        [Install]
+        WantedBy=multi-user.target

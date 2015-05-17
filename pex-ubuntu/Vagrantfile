@@ -1,0 +1,49 @@
+# Set default provider so it doesnt have to be passed to vagrant up
+ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
+
+host_name = "pex-dockerhost"
+host_path = "./host"
+ 
+Vagrant.configure("2") do |config|
+
+  config.vm.define "pex-elasticsearch" do |a|
+    a.vm.provider "docker" do |d|
+      d.name = "pex-elasticsearch"
+      d.image = "elasticsearch"
+      d.remains_running = true
+      d.ports = ["9200:9200"]
+      d.volumes = ["/usr/share/elasticsearch/config:/usr/share/elasticsearch/config"]
+      d.volumes = ["/usr/share/elasticsearch/data:/usr/share/elasticsearch/data"]
+      #d.cmd = ["pex-elasticsearch", "run", "elasticsearch -Des.node.name=pex-localdev"]
+
+      d.vagrant_machine = host_name
+      d.vagrant_vagrantfile = "#{host_path}/Vagrantfile"
+    end
+  end
+
+  config.vm.define "pex-mongo" do |a|
+    a.vm.provider "docker" do |d|
+      d.name = "pex-mongo"
+      d.image = "mongo"
+      d.remains_running = true
+      d.ports = ["27017:27017"]
+      d.volumes = ["/usr/share/mongo/data:/data"]
+
+      d.vagrant_machine = host_name
+      d.vagrant_vagrantfile = "#{host_path}/Vagrantfile"
+    end
+  end
+
+  config.vm.define "pex-rabbitmq" do |a|
+    a.vm.provider "docker" do |d|
+      d.name = "pex-rabbitmq"
+      d.image = "rabbitmq:3-management"
+      d.remains_running = true
+      d.ports = ["5672:5672","15672:15672"]
+
+      d.vagrant_machine = host_name
+      d.vagrant_vagrantfile = "#{host_path}/Vagrantfile"
+    end
+  end
+  
+end
